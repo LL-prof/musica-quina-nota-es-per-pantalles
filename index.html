@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lectura Musical</title>
+
+<style>
+:root{
+  --bg:#0f1220;
+  --card:#ffffff;
+  --accent:#25c26e;
+}
+
+body{
+  margin:0;
+  background:var(--bg);
+  font-family:system-ui;
+  overflow:hidden; /* 🚫 SIN SCROLL */
+}
+
+.app{
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  padding:10px;
+}
+
+/* TOP */
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  color:#fff;
+}
+
+.btn{
+  padding:10px 16px;
+  border-radius:10px;
+  border:none;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+/* PENTAGRAMA */
+.sheet{
+  background:#fff;
+  border-radius:12px;
+  padding:10px;
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+svg{
+  width:100%;
+  height:100%;
+}
+
+/* OPCIONES */
+.options{
+  display:flex;
+  gap:10px;
+  justify-content:center;
+}
+
+.opt{
+  flex:1;
+  padding:14px;
+  font-size:18px;
+  font-weight:900;
+  border-radius:12px;
+  border:none;
+  cursor:pointer;
+}
+
+.opt.correct{ background:#d4ffd9; }
+.opt.wrong{ background:#ffd4d4; }
+
+/* CONFETI */
+.confetti{
+  position:absolute;
+  width:6px;height:6px;
+  animation:confetti 600ms ease-out forwards;
+}
+@keyframes confetti{
+  to{
+    opacity:0;
+    transform:translate(var(--dx), var(--dy)) scale(0.6);
+  }
+}
+
+/* FINAL */
+.final{
+  position:absolute;
+  inset:0;
+  background:#000c;
+  color:#fff;
+  display:none;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  gap:20px;
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- TOP -->
+  <div class="top">
+    <div id="score">0 pts</div>
+    <button class="btn" id="play">▶</button>
+  </div>
+
+  <!-- PENTAGRAMA -->
+  <div class="sheet">
+    <svg viewBox="0 0 760 260">
+      <g stroke="#000" stroke-width="2">
+        <line x1="40" y1="80" x2="720" y2="80"/>
+        <line x1="40" y1="105" x2="720" y2="105"/>
+        <line x1="40" y1="130" x2="720" y2="130"/>
+        <line x1="40" y1="155" x2="720" y2="155"/>
+        <line x1="40" y1="180" x2="720" y2="180"/>
+      </g>
+      <text x="50" y="150" font-size="50">𝄞</text>
+      <g id="notes"></g>
+    </svg>
+  </div>
+
+  <!-- OPCIONES -->
+  <div class="options">
+    <button class="opt" id="o0"></button>
+    <button class="opt" id="o1"></button>
+    <button class="opt" id="o2"></button>
+  </div>
+
+</div>
+
+<!-- FINAL -->
+<div class="final" id="final">
+  <h2>Resultado</h2>
+  <div id="finalScore"></div>
+  <button class="btn" id="download">Descargar</button>
+</div>
+
+<script>
+/* ====== NOTAS ====== */
+const NOTES = ["do","re","mi","fa","sol","la","si","do2"];
+const OFF = { do:+2, re:+1, mi:0, fa:-1, sol:-2, la:-3, si:-4, do2:-5 };
+
+function yFor(n){
+  return 180 + OFF[n]*12.5;
+}
+
+/* ====== ESTADO ====== */
+let seq=[], step=0, round=0, score=0;
+let logs=[];
+
+/* ====== UI ====== */
+const notesG = document.getElementById("notes");
+const scoreEl = document.getElementById("score");
+
+/* ====== GENERAR NOTA ====== */
+function randNote(){
+  return NOTES[Math.floor(Math.random()*NOTES.length)];
+}
+
+/* ====== DIBUJAR ====== */
+function draw(){
+  notesG.innerHTML="";
+  seq.forEach((n,i)=>{
+    const x = 200 + i*80;
+    const y = yFor(n);
+    notesG.innerHTML += `
+      <g transform="translate(${x},${y})">
+        <ellipse rx="10" ry="7" fill="#000"/>
+        <line x1="10" y1="0" x2="10" y2="-40" stroke="#000" stroke-width="3"/>
+      </g>
+    `;
+  });
+}
+
+/* ====== OPCIONES ====== */
+function genOptions(correct){
+  let opts = [correct];
+  while(opts.length<3){
+    const n = randNote();
+    if(!opts.includes(n)) opts.push(n);
+  }
+  return opts.sort(()=>Math.random()-0.5);
+}
+
+function updateOptions(){
+  const correct = seq[seq.length-1];
+  const opts = genOptions(correct);
+
+  opts.forEach((o,i)=>{
+    const btn = document.getElementById("o"+i);
+    btn.textContent = o === "do2" ? "do↑" : o;
+    btn.onclick = ()=>answer(o, correct, btn);
+  });
+}
+
+/* ====== RESPUESTA ====== */
+function answer(ans, correct, btn){
+  const ok = ans === correct;
+
+  logs.push({
+    round, step,
+    correct, ans,
+    ok,
+    time:Date.now()
+  });
+
+  if(ok){
+    score += 100;
+    spawnConfetti(btn);
+  }else{
+    score -= 50;
+  }
+
+  scoreEl.textContent = score + " pts";
+
+  next();
+}
+
+/* ====== CONFETI ====== */
+function spawnConfetti(el){
+  const r = el.getBoundingClientRect();
+  for(let i=0;i<12;i++){
+    const c = document.createElement("div");
+    c.className="confetti";
+    c.style.left = (r.left + r.width/2)+"px";
+    c.style.top = (r.top)+"px";
+    c.style.background = ["#f1c40f","#2ecc71","#3498db","#e74c3c"][i%4];
+    c.style.setProperty("--dx",(Math.random()*80-40)+"px");
+    c.style.setProperty("--dy",(Math.random()*-80)+"px");
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(),600);
+  }
+}
+
+/* ====== SIGUIENTE ====== */
+function next(){
+  if(seq.length<3){
+    seq.push(randNote());
+  }else{
+    seq.shift();
+    seq.push(randNote());
+  }
+
+  step++;
+
+  if(step>=30){
+    end();
+    return;
+  }
+
+  if(step%3===0) round++;
+
+  draw();
+  updateOptions();
+}
+
+/* ====== AUDIO ====== */
+const ctx = new AudioContext();
+
+function playSeq(){
+  let t = ctx.currentTime;
+  seq.forEach(n=>{
+    const osc = ctx.createOscillator();
+    osc.frequency.value = 220 + NOTES.indexOf(n)*40;
+    osc.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t+0.3);
+    t+=0.35;
+  });
+}
+
+document.getElementById("play").onclick = playSeq;
+
+/* ====== FINAL ====== */
+function end(){
+  document.getElementById("final").style.display="flex";
+  document.getElementById("finalScore").textContent = score + " pts";
+}
+
+document.getElementById("download").onclick = ()=>{
+  const data = {
+    score,
+    logs
+  };
+  const blob = new Blob([JSON.stringify(data,null,2)]);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download="resultados.json";
+  a.click();
+};
+
+/* START */
+next();
+</script>
+</body>
+</html>
