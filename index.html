@@ -6,52 +6,52 @@
 <title>Lectura Musical</title>
 
 <style>
-:root{
-  --bg:#0f1220;
-  --card:#ffffff;
-  --accent:#25c26e;
-}
-
 body{
   margin:0;
-  background:var(--bg);
   font-family:system-ui;
-  overflow:hidden; /* 🚫 SIN SCROLL */
+  background:#0f1220;
+  overflow:hidden;
 }
 
 .app{
   height:100vh;
   display:flex;
   flex-direction:column;
-  justify-content:space-between;
-  padding:10px;
-}
-
-/* TOP */
-.top{
-  display:flex;
-  justify-content:space-between;
   align-items:center;
+  gap:10px;
+  padding:10px;
   color:#fff;
 }
 
-.btn{
-  padding:10px 16px;
-  border-radius:10px;
-  border:none;
-  font-weight:bold;
-  cursor:pointer;
+/* SCORE */
+.score{
+  font-size:22px;
+  font-weight:900;
+  text-align:center;
 }
 
-/* PENTAGRAMA */
+/* PROGRESS */
+.progressWrap{
+  width:80%;
+  height:10px;
+  background:#333;
+  border-radius:999px;
+  overflow:hidden;
+}
+.progress{
+  height:100%;
+  width:0%;
+  background:#25c26e;
+  transition:.3s;
+}
+
+/* SHEET */
 .sheet{
+  width:100%;
+  max-height:50vh;
   background:#fff;
   border-radius:12px;
-  padding:10px;
-  flex:1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  position:relative;
 }
 
 svg{
@@ -59,37 +59,42 @@ svg{
   height:100%;
 }
 
-/* OPCIONES */
+/* PLAYHEAD */
+.playhead{
+  position:absolute;
+  top:10px;
+  bottom:10px;
+  width:3px;
+  background:red;
+  opacity:0;
+}
+
+/* OPTIONS */
 .options{
+  margin-top:80px;
   display:flex;
-  gap:10px;
   justify-content:center;
+  gap:16px;
 }
 
 .opt{
-  flex:1;
-  padding:14px;
-  font-size:18px;
+  min-width:90px;
+  padding:12px 18px;
+  background:#fff;
+  border:2px solid #ddd;
+  border-radius:10px;
   font-weight:900;
-  border-radius:12px;
-  border:none;
   cursor:pointer;
 }
-
-.opt.correct{ background:#d4ffd9; }
-.opt.wrong{ background:#ffd4d4; }
 
 /* CONFETI */
 .confetti{
   position:absolute;
   width:6px;height:6px;
-  animation:confetti 600ms ease-out forwards;
+  animation:confetti .6s ease-out forwards;
 }
 @keyframes confetti{
-  to{
-    opacity:0;
-    transform:translate(var(--dx), var(--dy)) scale(0.6);
-  }
+  to{opacity:0; transform:translate(var(--dx),var(--dy));}
 }
 
 /* FINAL */
@@ -97,12 +102,10 @@ svg{
   position:absolute;
   inset:0;
   background:#000c;
-  color:#fff;
   display:none;
-  flex-direction:column;
   justify-content:center;
   align-items:center;
-  gap:20px;
+  flex-direction:column;
 }
 </style>
 </head>
@@ -110,133 +113,174 @@ svg{
 <body>
 <div class="app">
 
-  <!-- TOP -->
-  <div class="top">
-    <div id="score">0 pts</div>
-    <button class="btn" id="play">▶</button>
-  </div>
+<div class="score" id="score">0 pts</div>
 
-  <!-- PENTAGRAMA -->
-  <div class="sheet">
-    <svg viewBox="0 0 760 260">
-      <g stroke="#000" stroke-width="2">
-        <line x1="40" y1="80" x2="720" y2="80"/>
-        <line x1="40" y1="105" x2="720" y2="105"/>
-        <line x1="40" y1="130" x2="720" y2="130"/>
-        <line x1="40" y1="155" x2="720" y2="155"/>
-        <line x1="40" y1="180" x2="720" y2="180"/>
-      </g>
-      <text x="50" y="150" font-size="50">𝄞</text>
-      <g id="notes"></g>
-    </svg>
-  </div>
+<div class="progressWrap">
+  <div class="progress" id="progress"></div>
+</div>
 
-  <!-- OPCIONES -->
-  <div class="options">
-    <button class="opt" id="o0"></button>
-    <button class="opt" id="o1"></button>
-    <button class="opt" id="o2"></button>
-  </div>
+<div class="sheet">
+  <div class="playhead" id="playhead"></div>
+  <svg viewBox="0 0 760 260">
+    <g stroke="#000" stroke-width="2">
+      <line x1="40" y1="80" x2="720" y2="80"/>
+      <line x1="40" y1="105" x2="720" y2="105"/>
+      <line x1="40" y1="130" x2="720" y2="130"/>
+      <line x1="40" y1="155" x2="720" y2="155"/>
+      <line x1="40" y1="180" x2="720" y2="180"/>
+    </g>
+    <text x="50" y="150" font-size="50">𝄞</text>
+    <g id="notes"></g>
+  </svg>
+</div>
+
+<button onclick="playSeq()">▶</button>
+
+<div class="options">
+  <button class="opt" id="o0"></button>
+  <button class="opt" id="o1"></button>
+  <button class="opt" id="o2"></button>
+</div>
 
 </div>
 
-<!-- FINAL -->
 <div class="final" id="final">
   <h2>Resultado</h2>
   <div id="finalScore"></div>
-  <button class="btn" id="download">Descargar</button>
+  <button onclick="download()">Descargar</button>
 </div>
 
 <script>
-/* ====== NOTAS ====== */
-const NOTES = ["do","re","mi","fa","sol","la","si","do2"];
+/* ===== CONFIG ===== */
+const MAP = {
+  do:"do_negra.mp3",
+  re:"re_negra.mp3",
+  mi:"mi_negra.mp3",
+  fa:"fa_negra.mp3",
+  sol:"sol_negra.mp3",
+  la:"la_negra.mp3",
+  si:"si_negra.mp3",
+  do2:"do_sup_negra.mp3"
+};
+
+const NOTES = Object.keys(MAP);
 const OFF = { do:+2, re:+1, mi:0, fa:-1, sol:-2, la:-3, si:-4, do2:-5 };
+const lineGap = 25;
 
-function yFor(n){
-  return 180 + OFF[n]*12.5;
+/* ===== AUDIO ===== */
+let ctx = new AudioContext();
+let cache = {};
+
+async function load(n){
+  if(cache[n]) return cache[n];
+  let res = await fetch(MAP[n]);
+  let buf = await res.arrayBuffer();
+  let dec = await ctx.decodeAudioData(buf);
+  cache[n]=dec;
+  return dec;
 }
 
-/* ====== ESTADO ====== */
-let seq=[], step=0, round=0, score=0;
-let logs=[];
-
-/* ====== UI ====== */
-const notesG = document.getElementById("notes");
-const scoreEl = document.getElementById("score");
-
-/* ====== GENERAR NOTA ====== */
-function randNote(){
-  return NOTES[Math.floor(Math.random()*NOTES.length)];
+function playBuffer(buf,t){
+  let s = ctx.createBufferSource();
+  s.buffer=buf;
+  s.connect(ctx.destination);
+  s.start(t);
+  return buf.duration;
 }
 
-/* ====== DIBUJAR ====== */
-function draw(){
-  notesG.innerHTML="";
+/* ===== PLAY SEQ ===== */
+async function playSeq(){
+  let t = ctx.currentTime;
+  const xs = [];
   seq.forEach((n,i)=>{
-    const x = 200 + i*80;
-    const y = yFor(n);
-    notesG.innerHTML += `
-      <g transform="translate(${x},${y})">
-        <ellipse rx="10" ry="7" fill="#000"/>
-        <line x1="10" y1="0" x2="10" y2="-40" stroke="#000" stroke-width="3"/>
-      </g>
+    xs.push(260+i*100);
+  });
+
+  playhead.style.opacity=1;
+
+  for(let i=0;i<seq.length;i++){
+    let b = await load(seq[i]);
+    movePlayhead(xs[i]);
+    t += playBuffer(b,t)+0.05;
+  }
+
+  setTimeout(()=>playhead.style.opacity=0,500);
+}
+
+function movePlayhead(x){
+  const px = (x/760)*document.querySelector(".sheet").clientWidth;
+  playhead.style.left = px+"px";
+}
+
+/* ===== POS ===== */
+function yFor(n){
+  return 180 + OFF[n]*(lineGap/2);
+}
+
+/* ===== DRAW ===== */
+function draw(){
+  notes.innerHTML="";
+  seq.forEach((n,i)=>{
+    let x=260+i*100;
+    let y=yFor(n);
+    let r=lineGap/2;
+
+    let extra="";
+
+    /* línea interior si está en línea */
+    if(OFF[n]%2===0){
+      extra += `<line x1="${x-r}" y1="${y}" x2="${x+r}" y2="${y}" stroke="black" stroke-width="2"/>`;
+    }
+
+    /* ledger lines */
+    if(n==="do"){
+      extra += `<line x1="${x-20}" y1="${y}" x2="${x+20}" y2="${y}" stroke="black" stroke-width="2"/>`;
+    }
+    if(n==="do2"){
+      extra += `<line x1="${x-20}" y1="${y}" x2="${x+20}" y2="${y}" stroke="black" stroke-width="2"/>`;
+    }
+
+    notes.innerHTML += `
+      ${extra}
+      <circle cx="${x}" cy="${y}" r="${r}" fill="white" stroke="black" stroke-width="2"/>
     `;
   });
 }
 
-/* ====== OPCIONES ====== */
-function genOptions(correct){
-  let opts = [correct];
-  while(opts.length<3){
-    const n = randNote();
-    if(!opts.includes(n)) opts.push(n);
-  }
-  return opts.sort(()=>Math.random()-0.5);
+/* ===== OPTIONS ===== */
+function rand(){
+  return NOTES[Math.floor(Math.random()*NOTES.length)];
 }
 
-function updateOptions(){
-  const correct = seq[seq.length-1];
-  const opts = genOptions(correct);
+function gen(correct){
+  let arr=[correct];
+  while(arr.length<3){
+    let n=rand();
+    if(!arr.includes(n)) arr.push(n);
+  }
+  return arr.sort(()=>Math.random()-0.5);
+}
+
+function update(){
+  let c = seq[seq.length-1];
+  let opts = gen(c);
 
   opts.forEach((o,i)=>{
-    const btn = document.getElementById("o"+i);
-    btn.textContent = o === "do2" ? "do↑" : o;
-    btn.onclick = ()=>answer(o, correct, btn);
+    let b=document.getElementById("o"+i);
+    b.textContent=o==="do2"?"do↑":o;
+    b.onclick=()=>answer(o,c,b);
   });
 }
 
-/* ====== RESPUESTA ====== */
-function answer(ans, correct, btn){
-  const ok = ans === correct;
-
-  logs.push({
-    round, step,
-    correct, ans,
-    ok,
-    time:Date.now()
-  });
-
-  if(ok){
-    score += 100;
-    spawnConfetti(btn);
-  }else{
-    score -= 50;
-  }
-
-  scoreEl.textContent = score + " pts";
-
-  next();
-}
-
-/* ====== CONFETI ====== */
-function spawnConfetti(el){
-  const r = el.getBoundingClientRect();
-  for(let i=0;i<12;i++){
-    const c = document.createElement("div");
+/* ===== CONFETI ===== */
+function confetti(el){
+  let r=el.getBoundingClientRect();
+  for(let i=0;i<10;i++){
+    let c=document.createElement("div");
     c.className="confetti";
-    c.style.left = (r.left + r.width/2)+"px";
-    c.style.top = (r.top)+"px";
-    c.style.background = ["#f1c40f","#2ecc71","#3498db","#e74c3c"][i%4];
+    c.style.left=(r.left+r.width/2)+"px";
+    c.style.top=r.top+"px";
+    c.style.background=["#f1c40f","#2ecc71","#3498db"][i%3];
     c.style.setProperty("--dx",(Math.random()*80-40)+"px");
     c.style.setProperty("--dy",(Math.random()*-80)+"px");
     document.body.appendChild(c);
@@ -244,65 +288,63 @@ function spawnConfetti(el){
   }
 }
 
-/* ====== SIGUIENTE ====== */
-function next(){
-  if(seq.length<3){
-    seq.push(randNote());
+/* ===== STATE ===== */
+let seq=[], step=0, round=0, score=0;
+let logs=[];
+
+/* ===== ANSWER ===== */
+function answer(a,c,b){
+  let ok=a===c;
+
+  logs.push({round,step,c,a,ok});
+
+  if(ok){
+    score+=100;
+    confetti(b);
   }else{
-    seq.shift();
-    seq.push(randNote());
+    score-=50;
+  }
+
+  scoreEl.textContent=score+" pts";
+  next();
+}
+
+/* ===== NEXT ===== */
+function next(){
+
+  if(seq.length===0) seq=[rand()];
+  else if(seq.length===1) seq.push(rand());
+  else if(seq.length===2) seq.push(rand());
+  else{
+    seq=[rand()];
+    round++;
+    progress.style.width = (round/10*100)+"%";
   }
 
   step++;
 
-  if(step>=30){
-    end();
+  if(round>=10){
+    final.style.display="flex";
+    finalScore.textContent=score+" pts";
     return;
   }
 
-  if(step%3===0) round++;
-
   draw();
-  updateOptions();
+  update();
 }
 
-/* ====== AUDIO ====== */
-const ctx = new AudioContext();
-
-function playSeq(){
-  let t = ctx.currentTime;
-  seq.forEach(n=>{
-    const osc = ctx.createOscillator();
-    osc.frequency.value = 220 + NOTES.indexOf(n)*40;
-    osc.connect(ctx.destination);
-    osc.start(t);
-    osc.stop(t+0.3);
-    t+=0.35;
-  });
-}
-
-document.getElementById("play").onclick = playSeq;
-
-/* ====== FINAL ====== */
-function end(){
-  document.getElementById("final").style.display="flex";
-  document.getElementById("finalScore").textContent = score + " pts";
-}
-
-document.getElementById("download").onclick = ()=>{
-  const data = {
-    score,
-    logs
-  };
-  const blob = new Blob([JSON.stringify(data,null,2)]);
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+/* ===== DOWNLOAD ===== */
+function download(){
+  let blob=new Blob([JSON.stringify({score,logs},null,2)]);
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
   a.download="resultados.json";
   a.click();
-};
+}
 
-/* START */
+/* ===== INIT ===== */
 next();
 </script>
+
 </body>
 </html>
