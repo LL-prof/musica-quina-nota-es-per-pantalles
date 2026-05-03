@@ -35,13 +35,11 @@ body{
   height:10px;
   background:#333;
   border-radius:999px;
-  overflow:hidden;
 }
 .progress{
   height:100%;
   width:0%;
   background:#25c26e;
-  transition:.3s;
 }
 
 /* PENTAGRAMA */
@@ -199,24 +197,51 @@ function playBuffer(buf,t){
   return buf.duration;
 }
 
+/* ===== PLAYHEAD ===== */
+function movePlayhead(x){
+  const px = (x/760)*document.querySelector(".sheet").clientWidth;
+  playhead.style.left = px+"px";
+}
+
 /* ===== PLAY ===== */
 async function playSeq(){
   let t = ctx.currentTime;
+
   playhead.style.opacity=1;
 
   for(let i=0;i<seq.length;i++){
-    let x = 260+i*100;
-    movePlayhead(x);
+    movePlayhead(260+i*100);
     let b = await load(seq[i]);
     t += playBuffer(b,t)+0.05;
   }
 
-  setTimeout(()=>playhead.style.opacity=0,400);
+  setTimeout(()=>{
+    playhead.style.opacity=0;
+    playhead.style.left="0px";
+  },300);
 }
 
-function movePlayhead(x){
-  const px = (x/760)*document.querySelector(".sheet").clientWidth;
-  playhead.style.left = px+"px";
+/* ===== SONIDOS ===== */
+const audioCtx = new AudioContext();
+
+function soundOk(){
+  let o = audioCtx.createOscillator();
+  let g = audioCtx.createGain();
+  o.frequency.value=800;
+  g.gain.value=0.2;
+  o.connect(g).connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime+0.15);
+}
+
+function soundFail(){
+  let o = audioCtx.createOscillator();
+  let g = audioCtx.createGain();
+  o.frequency.value=200;
+  g.gain.value=0.2;
+  o.connect(g).connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime+0.2);
 }
 
 /* ===== POS ===== */
@@ -235,13 +260,13 @@ function draw(){
 
     let html="";
 
-    // línea interna (notas en línea)
+    // línea interna (mi sol si)
     if(OFF[n]%2===0){
       html += `<line x1="${x-r}" y1="${y}" x2="${x+r}" y2="${y}" stroke="black"/>`;
     }
 
-    // ledger lines (do grave y agudo)
-    if(n==="do" || n==="do2"){
+    // SOLO do grave tiene ledger
+    if(n==="do"){
       html += `<line x1="${x-20}" y1="${y}" x2="${x+20}" y2="${y}" stroke="black"/>`;
     }
 
@@ -305,12 +330,14 @@ function answer(a,c,b){
   if(ok){
     score+=100;
     confetti(b);
+    soundOk();
+    next();
   }else{
     score-=50;
+    soundFail();
   }
 
   scoreEl.textContent=score+" pts";
-  next();
 }
 
 /* ===== NEXT ===== */
@@ -339,17 +366,23 @@ function next(){
 
 /* ===== PDF ===== */
 function downloadPDF(){
-  const content = `
-RESULTADO FINAL
 
-Score: ${score}
+  let text = "RESULTADO FINAL\n\n";
+  text += "Puntuación: "+score+"\n\n";
 
-Logs:
-${JSON.stringify(logs,null,2)}
-`;
+  let currentRound = -1;
+
+  logs.forEach(l=>{
+    if(l.round !== currentRound){
+      currentRound = l.round;
+      text += "\nTANDA "+(currentRound+1)+"\n";
+    }
+
+    text += "Nota: "+l.correct+" → "+(l.ok?"ACIERTO":"FALLO (respondió "+l.answer+")")+"\n";
+  });
 
   const win = window.open("", "_blank");
-  win.document.write("<pre>"+content+"</pre>");
+  win.document.write("<pre>"+text+"</pre>");
   win.print();
 }
 
